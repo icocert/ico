@@ -3,34 +3,46 @@ import csv
 import datetime
 import json
 import os
+import shutil
 import time
 from decimal import Decimal
-import shutil
 
 import click
 from eth_utils import from_wei
 from eth_utils import is_checksum_address
 from eth_utils import to_wei
-
-from populus.utils.accounts import is_account_locked
 from populus import Project
+from populus.utils.accounts import is_account_locked
 from populus.utils.cli import request_account_unlock
 
 from ico.utils import check_succesful_tx
 
 
-
 @click.command()
-@click.option('--chain', nargs=1, default="mainnet", help='On which chain to deploy - see populus.json')
-@click.option('--hot-wallet-address', nargs=1, help='The account that deploys the issuer contract, controls the contract and pays for the gas fees', required=True)
-@click.option('--csv-file', nargs=1, help='CSV file containing distribution data', required=True)
-@click.option('--address-column', nargs=1, help='Name of CSV column containing Ethereum addresses', default="address")
-@click.option('--amount-column', nargs=1, help='Name of CSV column containing decimal token amounts', default="amount")
-@click.option('--id-column', nargs=1, help='Name of CSV column containing unique identifier for all refund participants (usually email)', default="email")
-@click.option('--limit', nargs=1, help='How many items to import in this batch', required=False, default=1000)
-@click.option('--start-from', nargs=1, help='First row to import (zero based)', required=False, default=0)
-@click.option('--state-file', nargs=1, help='JSON file where we keep the state', required=True)
-def main(chain, hot_wallet_address, csv_file, limit, start_from, address_column, amount_column, id_column, state_file):
+@click.option('--chain', nargs=1, default="mainnet",
+              help='On which chain to deploy - see populus.json')
+@click.option('--hot-wallet-address', nargs=1,
+              help='The account that deploys the issuer contract, controls the contract and pays for the gas fees',
+              required=True)
+@click.option('--csv-file', nargs=1,
+              help='CSV file containing distribution data', required=True)
+@click.option('--address-column', nargs=1,
+              help='Name of CSV column containing Ethereum addresses',
+              default="address")
+@click.option('--amount-column', nargs=1,
+              help='Name of CSV column containing decimal token amounts',
+              default="amount")
+@click.option('--id-column', nargs=1,
+              help='Name of CSV column containing unique identifier for all refund participants (usually email)',
+              default="email")
+@click.option('--limit', nargs=1, help='How many items to import in this batch',
+              required=False, default=1000)
+@click.option('--start-from', nargs=1, help='First row to import (zero based)',
+              required=False, default=0)
+@click.option('--state-file', nargs=1, help='JSON file where we keep the state',
+              required=True)
+def main(chain, hot_wallet_address, csv_file, limit, start_from, address_column,
+         amount_column, id_column, state_file):
     """Distribute ETh refunds.
 
     Reads in funds distribution data as CSV. Then sends funds from a local address.
@@ -55,7 +67,8 @@ def main(chain, hot_wallet_address, csv_file, limit, start_from, address_column,
     # Make a backup of the state file
     if os.path.exists(state_file):
         assert state_file.endswith(".json")
-        backup_name = state_file.replace(".json", "." + datetime.datetime.utcnow().isoformat() + ".bak.json")
+        backup_name = state_file.replace(".json",
+                                         "." + datetime.datetime.utcnow().isoformat() + ".bak.json")
         print("Backing up state file to", backup_name)
         shutil.copy(state_file, backup_name)
 
@@ -66,11 +79,12 @@ def main(chain, hot_wallet_address, csv_file, limit, start_from, address_column,
         web3 = c.web3
         print("Web3 provider is", web3.currentProvider)
         print("Hot wallet address is", hot_wallet_address)
-        print("Hot wallet balance is", from_wei(web3.eth.getBalance(hot_wallet_address), "ether"), "ETH")
+        print("Hot wallet balance is",
+              from_wei(web3.eth.getBalance(hot_wallet_address), "ether"), "ETH")
 
         # Goes through geth account unlock process if needed
         if is_account_locked(web3, hot_wallet_address):
-            request_account_unlock(c, hot_wallet_address, timeout=3600*6)
+            request_account_unlock(c, hot_wallet_address, timeout=3600 * 6)
             assert not is_account_locked(web3, hot_wallet_address)
 
         print("Reading data", csv_file)
@@ -93,7 +107,8 @@ def main(chain, hot_wallet_address, csv_file, limit, start_from, address_column,
 
         # Start distribution
         start_time = time.time()
-        start_balance = from_wei(web3.eth.getBalance(hot_wallet_address), "ether")
+        start_balance = from_wei(web3.eth.getBalance(hot_wallet_address),
+                                 "ether")
 
         print("Total rows", len(rows))
 
@@ -103,7 +118,7 @@ def main(chain, hot_wallet_address, csv_file, limit, start_from, address_column,
         else:
             state = {}
 
-        for i in range(start_from, min(start_from+limit, len(rows))):
+        for i in range(start_from, min(start_from + limit, len(rows))):
             data = rows[i]
             addr = data[address_column].strip()
             id = data[id_column].strip()
@@ -117,9 +132,12 @@ def main(chain, hot_wallet_address, csv_file, limit, start_from, address_column,
             # Use non-default gas price for speedier processing
             gas_price = int(web3.eth.gasPrice * 3)
 
-            txid = web3.eth.sendTransaction({"from": hot_wallet_address, "to": addr, "value": amount_wei, "gasPrice": gas_price})
+            txid = web3.eth.sendTransaction(
+                {"from": hot_wallet_address, "to": addr, "value": amount_wei,
+                 "gasPrice": gas_price})
             duration = time.time() - start_time
-            print("Transferring", id, amount_wei, "to", addr, "txid", txid, "duration", duration)
+            print("Transferring", id, amount_wei, "to", addr, "txid", txid,
+                  "duration", duration)
 
             state[id] = txid
             with open(state_file, "wt") as out:

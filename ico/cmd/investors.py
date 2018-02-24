@@ -7,10 +7,14 @@ import click
 from eth_utils import from_wei
 from populus import Project
 
+from .utils import maybe_open
+
 
 @click.command()
-@click.option('--chain', nargs=1, default="mainnet", help='On which chain to deploy - see populus.json')
-@click.option('--address', nargs=1, help='CrowdsaleContract address to scan', required=True)
+@click.option('--chain', nargs=1, default="mainnet",
+              help='On which chain to deploy - see populus.json')
+@click.option('--address', nargs=1, help='CrowdsaleContract address to scan',
+              required=True)
 @click.option('--csv-file', nargs=1, help='CSV fil to write', default=None)
 def main(chain, address, csv_file):
     """Extract crowdsale contract investors."""
@@ -24,10 +28,12 @@ def main(chain, address, csv_file):
         # Sanity check
         print("Block number is", web3.eth.blockNumber)
 
-        Crowdsale = c.provider.get_contract_factory('MintedTokenCappedCrowdsale')
+        Crowdsale = c.provider.get_contract_factory(
+            'MintedTokenCappedCrowdsale')
         crowdsale = Crowdsale(address=address)
 
-        print("Total amount raised is", from_wei(crowdsale.call().weiRaised(), "ether"), "ether")
+        print("Total amount raised is",
+              from_wei(crowdsale.call().weiRaised(), "ether"), "ether")
 
         print("Getting events")
         events = crowdsale.pastEvents("Invested").get(only_changes=False)
@@ -45,36 +51,30 @@ def main(chain, address, csv_file):
             if timestamp < current_first:
                 data["first_payment"] = timestamp
 
-            data["raised"] = data.get("raised", 0) + from_wei(e["args"]["weiAmount"], "ether")
+            data["raised"] = data.get("raised", 0) + from_wei(
+                e["args"]["weiAmount"], "ether")
             data["tokens"] = data.get("tokens", 0) + e["args"]["tokenAmount"]
             address_data[address] = data
 
-        if csv_file:
-            print("Writing results to", csv_file)
-            with open(csv_file, 'w', newline='') as out:
-                writer = csv.writer(out)
+        with maybe_open(csv_file, 'w', newline='') as out:
+            writer = csv.DictWriter(out,
+                                    fieldnames=["Address", "First payment at",
+                                                "Invested ETH",
+                                                "Received tokens"])
 
-                writer.writerow(["Address", "First payment at", "Invested ETH", "Received tokens"])
+            writer.writeheader()
 
-                for address, data in address_data.items():
-                    timestamp = data["first_payment"]
-                    dt = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
-                    writer.writerow([
-                        address,
-                        dt.isoformat(),
-                        str(data["raised"]),
-                        str(data["tokens"])
-                    ])
-        else:
             for address, data in address_data.items():
                 timestamp = data["first_payment"]
-                dt = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
-                print(
-                    address,
-                    dt.isoformat(),
-                    str(data["raised"]),
-                    str(data["tokens"])
-                )
+                dt = datetime.datetime.fromtimestamp(timestamp,
+                                                     tz=datetime.timezone.utc)
+
+                writer.writerow({
+                    "Address": address,
+                    "First payment at": dt.isoformat(),
+                    "Invested ETH": str(data["raised"]),
+                    "Received tokens": str(data["tokens"])
+                })
 
         print("Total", len(address_data), "investors")
         print("All done! Enjoy your decentralized future.")

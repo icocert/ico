@@ -1,21 +1,21 @@
 """Combine multiple CSV files to a single token distribution."""
 
-import csv
 import collections
+import csv
 from decimal import Decimal, ROUND_HALF_DOWN
 from typing import List
 
 import click
-from eth_utils import is_address
 from eth_utils import is_checksum_address
-from eth_utils import to_checksum_address
 from eth_utils import is_hex_address
+from eth_utils import to_checksum_address
 
 
 class AddressEntry:
     """Keep track of a balance of a single address."""
 
-    def __init__(self, amount: Decimal, sources: set, address_forms: set, count: int, rounded_amount: Decimal):
+    def __init__(self, amount: Decimal, sources: set, address_forms: set,
+                 count: int, rounded_amount: Decimal):
         self.amount = amount
         self.sources = sources
         self.count = count
@@ -23,7 +23,9 @@ class AddressEntry:
         self.address_forms = address_forms
 
 
-def read_file(combined: dict, all_errors: List[tuple], book_keeping: collections.Counter, csv_file: str, decimals: int, address_column: str, amount_column: str):
+def read_file(combined: dict, all_errors: List[tuple],
+              book_keeping: collections.Counter, csv_file: str, decimals: int,
+              address_column: str, amount_column: str):
     """Process a single CSV file."""
 
     rounder = Decimal(10) ** (-1 * decimals)
@@ -48,27 +50,34 @@ def read_file(combined: dict, all_errors: List[tuple], book_keeping: collections
 
             # Check for any Ethereum address
             if len(address) < 42:
-                errors.append((csv_file, line, "Not an Ethereum address: {}".format(address)))
+                errors.append((csv_file, line,
+                               "Not an Ethereum address: {}".format(address)))
                 continue
 
             try:
                 if not is_hex_address(address):
-                    errors.append((csv_file, line, "Not an Ethereum address: {}".format(address)))
+                    errors.append((csv_file, line,
+                                   "Not an Ethereum address: {}".format(
+                                       address)))
                     continue
             except UnicodeEncodeError:
-                errors.append([csv_file, line, "Could not decode: {}".format(address)])
+                errors.append(
+                    [csv_file, line, "Could not decode: {}".format(address)])
                 continue
 
             # Check if checksummed address if any of the letters is upper case
             if any([c.isupper() for c in address]):
                 if not is_checksum_address(address):
-                    errors.append((csv_file, line, "Not a checksummed Ethereum address: {}".format(address)))
+                    errors.append((csv_file, line,
+                                   "Not a checksummed Ethereum address: {}".format(
+                                       address)))
                     continue
 
             try:
                 amount = Decimal(amount)
             except ValueError:
-                errors.append((csv_file, line, "Bad decimal amount: {}".format(amount)))
+                errors.append(
+                    (csv_file, line, "Bad decimal amount: {}".format(amount)))
                 continue
 
             good_rows.append(row)
@@ -79,7 +88,8 @@ def read_file(combined: dict, all_errors: List[tuple], book_keeping: collections
             amount = row[amount_column].strip()
 
             amount = Decimal(amount)
-            rounded_amount = amount.quantize(rounder, rounding=ROUND_HALF_DOWN)  # Use explicit rounding
+            rounded_amount = amount.quantize(rounder,
+                                             rounding=ROUND_HALF_DOWN)  # Use explicit rounding
 
             sum += amount
             rounded_sum += rounded_amount
@@ -89,12 +99,16 @@ def read_file(combined: dict, all_errors: List[tuple], book_keeping: collections
 
             entry = combined.get(address)
             if not entry:
-                entry = AddressEntry(amount=Decimal(0), rounded_amount=Decimal(0), sources=set(), address_forms=set(), count=0)
+                entry = AddressEntry(amount=Decimal(0),
+                                     rounded_amount=Decimal(0), sources=set(),
+                                     address_forms=set(),
+                                     count=0)
                 combined[address] = entry
                 book_keeping["uniq_entries"] += 1
 
             entry.sources.add(csv_file)
-            entry.address_forms.add(row[address_column])  # Record original spelling of the address
+            entry.address_forms.add(
+                row[address_column])  # Record original spelling of the address
             entry.amount += amount
             entry.rounded_amount += rounded_amount
 
@@ -111,12 +125,22 @@ def read_file(combined: dict, all_errors: List[tuple], book_keeping: collections
 
 
 @click.command()
-@click.option('--input-file', nargs=1, help='CSV file to read and combine. It should be given multiple times for different files.', default=None, required=True, multiple=True)
-@click.option('--output-file', nargs=1, help='A CSV file to write the output', default=None, required=True)
-@click.option('--decimals', nargs=1, help='A number of decimal points to use', default=None, required=True, type=int)
-@click.option('--address-column', nargs=1, help='Name of CSV column containing Ethereum addresses', default="address")
-@click.option('--amount-column', nargs=1, help='Name of CSV column containing decimal token amounts', default="amount")
-def main(input_file: list, output_file: str, decimals: int, address_column: str, amount_column: str):
+@click.option('--input-file', nargs=1,
+              help='CSV file to read and combine. It should be given multiple times for different files.',
+              default=None,
+              required=True, multiple=True)
+@click.option('--output-file', nargs=1, help='A CSV file to write the output',
+              default=None, required=True)
+@click.option('--decimals', nargs=1, help='A number of decimal points to use',
+              default=None, required=True, type=int)
+@click.option('--address-column', nargs=1,
+              help='Name of CSV column containing Ethereum addresses',
+              default="address")
+@click.option('--amount-column', nargs=1,
+              help='Name of CSV column containing decimal token amounts',
+              default="amount")
+def main(input_file: list, output_file: str, decimals: int, address_column: str,
+         amount_column: str):
     """Combine multiple token distribution CSV files to a single CSV file good for an Issuer contract.
 
     - Input is a CSV file having columns Ethereum address, number of tokens
@@ -144,12 +168,15 @@ def main(input_file: list, output_file: str, decimals: int, address_column: str,
     book_keeping["total_entries"] = 0
 
     for single_file in input_file:
-        read_file(combined, errors, book_keeping, single_file, decimals, address_column, amount_column)
+        read_file(combined, errors, book_keeping, single_file, decimals,
+                  address_column, amount_column)
 
     # Write out valid combined output
     with open(output_file, 'w', newline='') as out:
         writer = csv.writer(out)
-        writer.writerow([address_column, amount_column, "Non-rounded amount", "Count", "Sources", "Address forms"])
+        writer.writerow(
+            [address_column, amount_column, "Non-rounded amount", "Count",
+             "Sources", "Address forms"])
 
         for address, entry in combined.items():
             writer.writerow([
@@ -168,8 +195,10 @@ def main(input_file: list, output_file: str, decimals: int, address_column: str,
     print("Valid entries:", book_keeping["total_entries"])
     print("Unique entries:", book_keeping["uniq_entries"])
     print("Total distribution", book_keeping["token_total"], "tokens")
-    print("Total distribution, raw approve() amount", int((book_keeping["token_total"] + 1) * 10**decimals), "tokens")
+    print("Total distribution, raw approve() amount",
+          int((book_keeping["token_total"] + 1) * 10 ** decimals), "tokens")
     print("Total", len(errors), "errors")
+
 
 if __name__ == "__main__":
     main()

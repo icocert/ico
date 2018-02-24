@@ -1,28 +1,26 @@
 """Load a token vault."""
 import csv
+import sys
 import time
-
-import click
 from decimal import Decimal
 
-import sys
+import click
 from eth_utils import from_wei
+from populus import Project
+from populus.utils.accounts import is_account_locked
+from populus.utils.cli import request_account_unlock
 from web3 import Web3
 from web3.contract import Contract
 
-from populus.utils.accounts import is_account_locked
-from populus import Project
-from populus.utils.cli import request_account_unlock
-
-from ico.utils import check_succesful_tx
-from ico.utils import check_multiple_succesful_txs
-from ico.etherscan import verify_contract
 from ico.etherscan import get_etherscan_link
+from ico.etherscan import verify_contract
+from ico.utils import check_multiple_succesful_txs
+from ico.utils import check_succesful_tx
 from ico.utils import get_constructor_arguments
 
 
-def deploy(project: Project, chain, chain_name, web3: Web3, address: str, token: Contract, freeze_ends_at: int, tokens_to_be_allocated: int):
-
+def deploy(project: Project, chain, chain_name, web3: Web3, address: str,
+           token: Contract, freeze_ends_at: int, tokens_to_be_allocated: int):
     # TODO: Fix Populus support this via an deploy argument
     if "JSONFile" in chain.registrar.registrar_backends:
         del chain.registrar.registrar_backends["JSONFile"]
@@ -44,7 +42,9 @@ def deploy(project: Project, chain, chain_name, web3: Web3, address: str, token:
     }
 
     print("Deploying new TokenVault contract", args)
-    token_vault, txhash = chain.provider.deploy_contract("TokenVault", deploy_transaction=transaction, deploy_args=args)
+    token_vault, txhash = chain.provider.deploy_contract("TokenVault",
+                                                         deploy_transaction=transaction,
+                                                         deploy_args=args)
     check_succesful_tx(web3, txhash)
 
     const_args = get_constructor_arguments(token_vault, args)
@@ -65,8 +65,8 @@ def deploy(project: Project, chain, chain_name, web3: Web3, address: str, token:
     return token_vault
 
 
-def load(chain, web3: Web3, address: str, csv_file: str, token: Contract, address_column: str, amount_column: str, vault_address: str):
-
+def load(chain, web3: Web3, address: str, csv_file: str, token: Contract,
+         address_column: str, amount_column: str, vault_address: str):
     decimals = token.call().decimals()
     decimal_multiplier = 10 ** decimals
     transaction = {"from": address}
@@ -99,7 +99,8 @@ def load(chain, web3: Web3, address: str, csv_file: str, token: Contract, addres
             raise RuntimeError("Invalid amount:".format(amount))
 
     if token_vault.call().tokensToBeAllocated() != total * decimal_multiplier:
-        raise RuntimeError("Expected total amount {}, CSV sum is {}".format(token_vault.call().tokensToBeAllocated(), total))
+        raise RuntimeError("Expected total amount {}, CSV sum is {}".format(
+            token_vault.call().tokensToBeAllocated(), total))
 
     # Start distribution
     start_time = time.time()
@@ -122,11 +123,14 @@ def load(chain, web3: Web3, address: str, csv_file: str, token: Contract, addres
 
         # http://stackoverflow.com/a/19965088/315168
         if not tokens % 1 == 0:
-            raise RuntimeError("Could not issue tokens because after multiplication was not integer")
+            raise RuntimeError(
+                "Could not issue tokens because after multiplication was not integer")
 
         tokens = int(tokens)
 
-        print("Row", i, "giving", tokens, "to", addr, "vault", token_vault.address, "time passed", time.time() - start_time, "ETH spent", spent)
+        print("Row", i, "giving", tokens, "to", addr, "vault",
+              token_vault.address, "time passed", time.time() - start_time,
+              "ETH spent", spent)
 
         if token_vault.call().balances(addr) > 0:
             print("Already issued, skipping")
@@ -157,7 +161,8 @@ def lock(chain, web3: Web3, address: str, token: Contract, vault_address: str):
     print("Tokens allocated", token_vault.call().tokensAllocatedTotal())
     print("Tokens hold", token_vault.call().getBalance())
 
-    if not(token_vault.call().tokensToBeAllocated() == token_vault.call().tokensAllocatedTotal() == token_vault.call().getBalance()):
+    if not (
+                token_vault.call().tokensToBeAllocated() == token_vault.call().tokensAllocatedTotal() == token_vault.call().getBalance()):
         sys.exit("Vault token balances mismatch")
 
     transaction = {
@@ -170,19 +175,39 @@ def lock(chain, web3: Web3, address: str, token: Contract, vault_address: str):
 
 
 @click.command()
-@click.option('--action', nargs=1, help='One of: deploy, load, lock', required=False, default=None)
-@click.option('--chain', nargs=1, default="mainnet", help='On which chain to deploy - see populus.json')
-@click.option('--address', nargs=1, help='The account that deploys the vault contract, controls the contract and pays for the gas fees', required=True)
-@click.option('--token-address', nargs=1, help='Token contract address', required=True)
-@click.option('--csv-file', nargs=1, help='CSV file containing distribution data', required=False)
-@click.option('--address-column', nargs=1, help='Name of CSV column containing Ethereum addresses', default="address")
-@click.option('--amount-column', nargs=1, help='Name of CSV column containing decimal token amounts', default="amount")
-@click.option('--limit', nargs=1, help='How many items to import in this batch', required=False, default=1000)
-@click.option('--start-from', nargs=1, help='First row to import (zero based)', required=False, default=0)
-@click.option('--vault-address', nargs=1, help='The address of the vault contract - leave out for the first run to deploy a new issuer contract', required=False, default=None)
-@click.option('--freeze-ends-at', nargs=1, help='UNIX timestamp when vault freeze ends for deployment', required=False, default=None, type=int)
-@click.option('--tokens-to-be-allocated', nargs=1, help='Manually verified count of tokens to be set in the vault', required=False, default=None, type=int)
-def main(chain, address, token_address, csv_file, limit, start_from, vault_address, address_column, amount_column, action, freeze_ends_at, tokens_to_be_allocated):
+@click.option('--action', nargs=1, help='One of: deploy, load, lock',
+              required=False, default=None)
+@click.option('--chain', nargs=1, default="mainnet",
+              help='On which chain to deploy - see populus.json')
+@click.option('--address', nargs=1,
+              help='The account that deploys the vault contract, controls the contract and pays for the gas fees',
+              required=True)
+@click.option('--token-address', nargs=1, help='Token contract address',
+              required=True)
+@click.option('--csv-file', nargs=1,
+              help='CSV file containing distribution data', required=False)
+@click.option('--address-column', nargs=1,
+              help='Name of CSV column containing Ethereum addresses',
+              default="address")
+@click.option('--amount-column', nargs=1,
+              help='Name of CSV column containing decimal token amounts',
+              default="amount")
+@click.option('--limit', nargs=1, help='How many items to import in this batch',
+              required=False, default=1000)
+@click.option('--start-from', nargs=1, help='First row to import (zero based)',
+              required=False, default=0)
+@click.option('--vault-address', nargs=1,
+              help='The address of the vault contract - leave out for the first run to deploy a new issuer contract',
+              required=False, default=None)
+@click.option('--freeze-ends-at', nargs=1,
+              help='UNIX timestamp when vault freeze ends for deployment',
+              required=False, default=None, type=int)
+@click.option('--tokens-to-be-allocated', nargs=1,
+              help='Manually verified count of tokens to be set in the vault',
+              required=False, default=None, type=int)
+def main(chain, address, token_address, csv_file, limit, start_from,
+         vault_address, address_column, amount_column, action, freeze_ends_at,
+         tokens_to_be_allocated):
     """TokenVault control script.
 
     1) Deploys a token vault contract
@@ -199,11 +224,12 @@ def main(chain, address, token_address, csv_file, limit, start_from, vault_addre
         web3 = c.web3
         print("Web3 provider is", web3.currentProvider)
         print("Owner address is", address)
-        print("Owner balance is", from_wei(web3.eth.getBalance(address), "ether"), "ETH")
+        print("Owner balance is",
+              from_wei(web3.eth.getBalance(address), "ether"), "ETH")
 
         # Goes through geth account unlock process if needed
         if is_account_locked(web3, address):
-            request_account_unlock(c, address, timeout=3600*6)
+            request_account_unlock(c, address, timeout=3600 * 6)
             assert not is_account_locked(web3, address)
 
         Token = c.contract_factories.FractionalERC20
@@ -214,27 +240,30 @@ def main(chain, address, token_address, csv_file, limit, start_from, vault_addre
         try:
             decimals = token.call().decimals()
         except ValueError:
-            sys.exit("Token contract does not have support for decimal places, cannot work with it")
+            sys.exit(
+                "Token contract does not have support for decimal places, cannot work with it")
 
         print("Token decimal places is", decimals)
         assert decimals >= 0
 
         if action == "deploy":
-            deploy(project, c, chain, web3, address, token, freeze_ends_at, tokens_to_be_allocated * (10**decimals))
+            deploy(project, c, chain, web3, address, token, freeze_ends_at,
+                   tokens_to_be_allocated * (10 ** decimals))
             print("TokenVault deployed.")
             sys.exit(0)
         elif action == "load":
 
-            if vault_address == None:
+            if not vault_address:
                 sys.exit("vault_address missing")
 
-            if address_column == None:
+            if not address_column:
                 sys.exit("address_column missing")
 
-            if amount_column == None:
+            if not amount_column:
                 sys.exit("amount_column missing")
 
-            load(c, web3, address, csv_file, token, address_column, amount_column, vault_address)
+            load(c, web3, address, csv_file, token, address_column,
+                 amount_column, vault_address)
             print("Data loaded to the vault.")
             sys.exit(0)
         elif action == "lock":

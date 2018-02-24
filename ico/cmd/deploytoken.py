@@ -1,36 +1,47 @@
 """Deploy tokens contract."""
-import os
-import time
-import sys
-import datetime
 
 import click
 from eth_utils import from_wei
-from eth_utils import to_wei
-from populus.utils.accounts import is_account_locked
 from populus import Project
+from populus.utils.accounts import is_account_locked
 from populus.utils.cli import request_account_unlock
 
+from ico.etherscan import get_etherscan_link
+from ico.etherscan import verify_contract
 from ico.utils import check_succesful_tx
 from ico.utils import get_constructor_arguments
-from ico.etherscan import verify_contract
-from ico.etherscan import get_etherscan_link
 
 
 @click.command()
-@click.option('--chain', nargs=1, default="mainnet", help='On which chain to deploy - see populus.json')
-@click.option('--address', nargs=1, help='Address to deploy from and who becomes as a owner (must exist on geth)', required=True)
-@click.option('--contract-name', nargs=1, help='Name of the token contract', default="CentrallyIssuedToken")
-@click.option('--release-agent', nargs=1, help='Address that acts as a release agent (can be same as owner)', default=None)
-@click.option('--minting-agent', nargs=1, help='Address that acts as a minting agent (can be same as owner)', default=None)
+@click.option('--chain', nargs=1, default="mainnet",
+              help='On which chain to deploy - see populus.json')
+@click.option('--address', nargs=1,
+              help='Address to deploy from and who becomes as a owner (must exist on geth)',
+              required=True)
+@click.option('--contract-name', nargs=1, help='Name of the token contract',
+              default="CentrallyIssuedToken")
+@click.option('--release-agent', nargs=1,
+              help='Address that acts as a release agent (can be same as owner)',
+              default=None)
+@click.option('--minting-agent', nargs=1,
+              help='Address that acts as a minting agent (can be same as owner)',
+              default=None)
 @click.option('--name', nargs=1, required=True, help='Token name', type=str)
 @click.option('--symbol', nargs=1, required=True, help='Token symbol', type=str)
-@click.option('--supply', nargs=1, default=21000000, help='Initial token supply (multipled with decimals)', type=int)
-@click.option('--decimals', nargs=1, default=0, help='How many decimal points the token has', type=int)
-@click.option('--verify/--no-verify', default=False, help='Verify contract on EtherScan.io')
-@click.option('--verify-filename', nargs=1, help='Solidity source file of the token contract for verification', default=None)
-@click.option('--master-address', nargs=1, help='Move tokens and upgrade master to this account', default=None)
-def main(chain, address, contract_name, name, symbol, supply, decimals, minting_agent, release_agent, verify, verify_filename, master_address):
+@click.option('--supply', nargs=1, default=21000000,
+              help='Initial token supply (multipled with decimals)', type=int)
+@click.option('--decimals', nargs=1, default=0,
+              help='How many decimal points the token has', type=int)
+@click.option('--verify/--no-verify', default=False,
+              help='Verify contract on EtherScan.io')
+@click.option('--verify-filename', nargs=1,
+              help='Solidity source file of the token contract for verification',
+              default=None)
+@click.option('--master-address', nargs=1,
+              help='Move tokens and upgrade master to this account',
+              default=None)
+def main(chain, address, contract_name, name, symbol, supply, decimals,
+         minting_agent, release_agent, verify, verify_filename, master_address):
     """Deploy a single crowdsale token contract.
 
     THIS COMMAND IS DEPRECATED. PLEASE USE deploy-contracts instead.
@@ -49,7 +60,8 @@ def main(chain, address, contract_name, name, symbol, supply, decimals, minting_
         web3 = c.web3
         print("Web3 provider is", web3.currentProvider)
         print("Deployer address is", address)
-        print("Deployer balance is", from_wei(web3.eth.getBalance(address), "ether"), "ETH")
+        print("Deployer balance is",
+              from_wei(web3.eth.getBalance(address), "ether"), "ETH")
 
         # Goes through geth account unlock process if needed
         if is_account_locked(web3, address):
@@ -72,7 +84,9 @@ def main(chain, address, contract_name, name, symbol, supply, decimals, minting_
 
         print("Starting contract deployment")
         # This does deployment with all dependencies linked in
-        contract, txhash = c.provider.deploy_contract(contract_name, deploy_transaction=transaction, deploy_args=args)
+        contract, txhash = c.provider.deploy_contract(contract_name,
+                                                      deploy_transaction=transaction,
+                                                      deploy_args=args)
         check_succesful_tx(web3, txhash)
         print("Contract address is", contract.address)
 
@@ -88,15 +102,19 @@ def main(chain, address, contract_name, name, symbol, supply, decimals, minting_
 
         if minting_agent:
             print("Setting minting agent")
-            txid = contract.transact(transaction).setMintAgent(minting_agent, True)
+            txid = contract.transact(transaction).setMintAgent(minting_agent,
+                                                               True)
             check_succesful_tx(web3, txid)
 
         if master_address:
-            print("Moving upgrade master to a team multisig wallet", master_address)
-            txid = contract.transact({"from": address}).setUpgradeMaster(master_address)
+            print("Moving upgrade master to a team multisig wallet",
+                  master_address)
+            txid = contract.transact({"from": address}).setUpgradeMaster(
+                master_address)
             check_succesful_tx(web3, txid)
             print("Moving total supply a team multisig wallet", master_address)
-            contract.transact({"from": address}).transfer(master_address, contract.call().totalSupply())
+            contract.transact({"from": address}).transfer(master_address,
+                                                          contract.call().totalSupply())
             check_succesful_tx(web3, txid)
 
         if verify:

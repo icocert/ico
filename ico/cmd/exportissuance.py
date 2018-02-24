@@ -2,17 +2,19 @@ import csv
 import datetime
 import json
 import os
+from decimal import Decimal
 
 import click
-from decimal import Decimal
-from eth_utils import from_wei
 from populus import Project
 
 
 @click.command()
-@click.option('--chain', nargs=1, default="mainnet", help='On which chain to deploy - see populus.json')
-@click.option('--address', nargs=1, help='CrowdsaleContract address to scan', required=True)
-@click.option('--csv-file', nargs=1, help='CSV file to write', default=None, required=True)
+@click.option('--chain', nargs=1, default="mainnet",
+              help='On which chain to deploy - see populus.json')
+@click.option('--address', nargs=1, help='CrowdsaleContract address to scan',
+              required=True)
+@click.option('--csv-file', nargs=1, help='CSV file to write', default=None,
+              required=True)
 def main(chain, address, csv_file):
     """Export issued events.
 
@@ -40,13 +42,15 @@ def main(chain, address, csv_file):
         IssuerWithId = c.provider.get_base_contract_factory('IssuerWithId')
         contract = IssuerWithId(address=address)
 
-        CentrallyIssuedToken = c.provider.get_base_contract_factory('CentrallyIssuedToken')
+        CentrallyIssuedToken = c.provider.get_base_contract_factory(
+            'CentrallyIssuedToken')
         token = CentrallyIssuedToken(address=contract.call().token())
 
         decimals = token.call().decimals()
-        decimal_multiplier = 10**decimals
+        decimal_multiplier = 10 ** decimals
 
-        print("Token", token.call().symbol(), "has", decimals, "decimals, multiplier is", decimal_multiplier)
+        print("Token", token.call().symbol(), "has", decimals,
+              "decimals, multiplier is", decimal_multiplier)
 
         print("Getting events")
         events = contract.pastEvents("Issued").get(only_changes=False)
@@ -64,7 +68,8 @@ def main(chain, address, csv_file):
         with open(csv_file, 'w', newline='') as out:
             writer = csv.writer(out)
 
-            writer.writerow(["External id", "Payment at", "Tx hash", "Received tokens"])
+            writer.writerow(
+                ["External id", "Payment at", "Tx hash", "Received tokens"])
 
             for idx, e in enumerate(events):
 
@@ -76,7 +81,8 @@ def main(chain, address, csv_file):
 
                 block_number = e["blockNumber"]
                 if block_number not in timestamps:
-                    timestamps[block_number] = web3.eth.getBlock(block_number)["timestamp"]
+                    timestamps[block_number] = web3.eth.getBlock(block_number)[
+                        "timestamp"]
 
                 amount = Decimal(e["args"]["amount"])
                 external_id = e["args"]["id"]
@@ -85,7 +91,8 @@ def main(chain, address, csv_file):
                 tokens = tokens.quantize(Decimal(10 ** -decimals))
 
                 timestamp = timestamps[block_number]
-                dt = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
+                dt = datetime.datetime.fromtimestamp(timestamp,
+                                                     tz=datetime.timezone.utc)
                 writer.writerow([
                     external_id,
                     dt.isoformat(),
